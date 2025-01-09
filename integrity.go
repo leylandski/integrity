@@ -86,9 +86,9 @@ func SignFile(issuer, path string, key *rsa.PrivateKey) ([]byte, error) {
 }
 
 // Verify returns whether the issuer, subject, and digest match the ones in the JWT contained in data.
-func Verify(issuer, subject string, digest [32]byte, data []byte, key *rsa.PublicKey) (bool, error) {
-	if len(data) < 1 {
-		return false, errors.New("data cannot be empty")
+func Verify(issuer, subject string, data []byte, token []byte, key *rsa.PublicKey) (bool, error) {
+	if len(token) < 1 {
+		return false, errors.New("token cannot be empty")
 	}
 	if issuer == "" {
 		return false, errors.New("issuer cannot be empty")
@@ -101,7 +101,7 @@ func Verify(issuer, subject string, digest [32]byte, data []byte, key *rsa.Publi
 	}
 
 	claims := tokenClaims{}
-	_, err := jwt.ParseWithClaims(string(data), &claims, func(t *jwt.Token) (interface{}, error) {
+	_, err := jwt.ParseWithClaims(string(token), &claims, func(t *jwt.Token) (interface{}, error) {
 		if _, ok := t.Method.(*jwt.SigningMethodRSA); !ok {
 			return nil, jwt.ErrTokenSignatureInvalid
 		}
@@ -119,6 +119,8 @@ func Verify(issuer, subject string, digest [32]byte, data []byte, key *rsa.Publi
 	} else if n != 32 {
 		return false, errors.New("did not decode expected number of bytes from hex digest string")
 	}
+
+	digest := sha256.Sum256(data)
 
 	for i := 0; i < 32; i++ {
 		if digest[i] != claimDigest[i] {
@@ -151,9 +153,6 @@ func VerifyFile(issuer, path, integrityPath string, key *rsa.PublicKey) (bool, e
 		return false, err
 	}
 
-	digest := sha256.Sum256(data)
-	data = nil
-
 	integf, err := os.OpenFile(integrityPath, os.O_RDONLY, 0444)
 	if err != nil {
 		return false, err
@@ -168,7 +167,7 @@ func VerifyFile(issuer, path, integrityPath string, key *rsa.PublicKey) (bool, e
 	pathParts := strings.Split(strings.Replace(path, "\\", "/", -1), "/")
 	subject := pathParts[len(pathParts)-1]
 
-	return Verify(issuer, subject, digest, integrityData, key)
+	return Verify(issuer, subject, data, integrityData, key)
 }
 
 // WithNowFunc overrides the function to get the current time. Call this with a function that returns a static time for

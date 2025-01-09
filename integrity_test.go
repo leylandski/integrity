@@ -332,8 +332,8 @@ func TestVerify(t *testing.T) {
 	type args struct {
 		issuer  string
 		subject string
-		digest  [32]byte
 		data    []byte
+		token   []byte
 		key     *rsa.PublicKey
 	}
 	tests := []struct {
@@ -347,8 +347,8 @@ func TestVerify(t *testing.T) {
 			args: args{
 				issuer:  testIssuer,
 				subject: testSubject,
-				digest:  testFileDigest,
-				data:    []byte("eyJhbGciOiJSUzUxMiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ0ZXN0X2lzc3VlciIsInN1YiI6InRlc3Rfc3ViamVjdCIsIm5iZiI6MTczNjM0OTQzMCwiaWF0IjoxNzM2MzQ5NDMwLCJkaWdlc3QiOiIxNWM0MTZkN2JkOTg5MGY1Y2JjYzg3NTEyMjgzN2FkM2YxNGEyNTg5ZDFkMTYzYjBhNjg1Yzg2ODcwMDgyMjcwIn0.RmVuxnCntd6DVeFjTNE0-s47i5tALJ0vHgmimTPQSNoTWLM-kn8fipytFfR-yKzAPc5AwpVAE5Z3YNJ-D6C-nphnCSOch6_YDIWTVASvIbtYkCby9QMBQvemFMtq07AIIbe59O4krrp5obKmhjtyIFTm7dJiTGC9jj1JCtcR144h_egiDUdkvt3ISpii_BgbhCfVJ4xomPg_0GjknUaKeZZEs1rqZT44rH8-1DicD_eomqp7NZVTMLIiYL9RpbjlyYKbTuODqvRnkzrGhuVjCTiujgCWDVGOaBZE_ExD2XYhMhY14p5ezv3Tehp2eqvqPhZ1CHGt4cVCdcmNcAzBIw"),
+				data:    testFileData,
+				token:   []byte("eyJhbGciOiJSUzUxMiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ0ZXN0X2lzc3VlciIsInN1YiI6InRlc3Rfc3ViamVjdCIsIm5iZiI6MTczNjM0OTQzMCwiaWF0IjoxNzM2MzQ5NDMwLCJkaWdlc3QiOiIxNWM0MTZkN2JkOTg5MGY1Y2JjYzg3NTEyMjgzN2FkM2YxNGEyNTg5ZDFkMTYzYjBhNjg1Yzg2ODcwMDgyMjcwIn0.RmVuxnCntd6DVeFjTNE0-s47i5tALJ0vHgmimTPQSNoTWLM-kn8fipytFfR-yKzAPc5AwpVAE5Z3YNJ-D6C-nphnCSOch6_YDIWTVASvIbtYkCby9QMBQvemFMtq07AIIbe59O4krrp5obKmhjtyIFTm7dJiTGC9jj1JCtcR144h_egiDUdkvt3ISpii_BgbhCfVJ4xomPg_0GjknUaKeZZEs1rqZT44rH8-1DicD_eomqp7NZVTMLIiYL9RpbjlyYKbTuODqvRnkzrGhuVjCTiujgCWDVGOaBZE_ExD2XYhMhY14p5ezv3Tehp2eqvqPhZ1CHGt4cVCdcmNcAzBIw"),
 				key:     publicKey,
 			},
 			want:    true,
@@ -359,8 +359,8 @@ func TestVerify(t *testing.T) {
 			args: args{
 				issuer:  "",
 				subject: testSubject,
-				digest:  testFileDigest,
-				data:    []byte("eyJhbGciOiJSUzUxMiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ0ZXN0X2lzc3VlciIsInN1YiI6InRlc3Rfc3ViamVjdCIsIm5iZiI6MTczNjM0OTQzMCwiaWF0IjoxNzM2MzQ5NDMwLCJkaWdlc3QiOiIxNWM0MTZkN2JkOTg5MGY1Y2JjYzg3NTEyMjgzN2FkM2YxNGEyNTg5ZDFkMTYzYjBhNjg1Yzg2ODcwMDgyMjcwIn0.RmVuxnCntd6DVeFjTNE0-s47i5tALJ0vHgmimTPQSNoTWLM-kn8fipytFfR-yKzAPc5AwpVAE5Z3YNJ-D6C-nphnCSOch6_YDIWTVASvIbtYkCby9QMBQvemFMtq07AIIbe59O4krrp5obKmhjtyIFTm7dJiTGC9jj1JCtcR144h_egiDUdkvt3ISpii_BgbhCfVJ4xomPg_0GjknUaKeZZEs1rqZT44rH8-1DicD_eomqp7NZVTMLIiYL9RpbjlyYKbTuODqvRnkzrGhuVjCTiujgCWDVGOaBZE_ExD2XYhMhY14p5ezv3Tehp2eqvqPhZ1CHGt4cVCdcmNcAzBIw"),
+				data:    testFileData,
+				token:   []byte("eyJhbGciOiJSUzUxMiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ0ZXN0X2lzc3VlciIsInN1YiI6InRlc3Rfc3ViamVjdCIsIm5iZiI6MTczNjM0OTQzMCwiaWF0IjoxNzM2MzQ5NDMwLCJkaWdlc3QiOiIxNWM0MTZkN2JkOTg5MGY1Y2JjYzg3NTEyMjgzN2FkM2YxNGEyNTg5ZDFkMTYzYjBhNjg1Yzg2ODcwMDgyMjcwIn0.RmVuxnCntd6DVeFjTNE0-s47i5tALJ0vHgmimTPQSNoTWLM-kn8fipytFfR-yKzAPc5AwpVAE5Z3YNJ-D6C-nphnCSOch6_YDIWTVASvIbtYkCby9QMBQvemFMtq07AIIbe59O4krrp5obKmhjtyIFTm7dJiTGC9jj1JCtcR144h_egiDUdkvt3ISpii_BgbhCfVJ4xomPg_0GjknUaKeZZEs1rqZT44rH8-1DicD_eomqp7NZVTMLIiYL9RpbjlyYKbTuODqvRnkzrGhuVjCTiujgCWDVGOaBZE_ExD2XYhMhY14p5ezv3Tehp2eqvqPhZ1CHGt4cVCdcmNcAzBIw"),
 				key:     publicKey,
 			},
 			want:    false,
@@ -371,32 +371,8 @@ func TestVerify(t *testing.T) {
 			args: args{
 				issuer:  testIssuer,
 				subject: "",
-				digest:  testFileDigest,
-				data:    []byte("eyJhbGciOiJSUzUxMiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ0ZXN0X2lzc3VlciIsInN1YiI6InRlc3Rfc3ViamVjdCIsIm5iZiI6MTczNjM0OTQzMCwiaWF0IjoxNzM2MzQ5NDMwLCJkaWdlc3QiOiIxNWM0MTZkN2JkOTg5MGY1Y2JjYzg3NTEyMjgzN2FkM2YxNGEyNTg5ZDFkMTYzYjBhNjg1Yzg2ODcwMDgyMjcwIn0.RmVuxnCntd6DVeFjTNE0-s47i5tALJ0vHgmimTPQSNoTWLM-kn8fipytFfR-yKzAPc5AwpVAE5Z3YNJ-D6C-nphnCSOch6_YDIWTVASvIbtYkCby9QMBQvemFMtq07AIIbe59O4krrp5obKmhjtyIFTm7dJiTGC9jj1JCtcR144h_egiDUdkvt3ISpii_BgbhCfVJ4xomPg_0GjknUaKeZZEs1rqZT44rH8-1DicD_eomqp7NZVTMLIiYL9RpbjlyYKbTuODqvRnkzrGhuVjCTiujgCWDVGOaBZE_ExD2XYhMhY14p5ezv3Tehp2eqvqPhZ1CHGt4cVCdcmNcAzBIw"),
-				key:     publicKey,
-			},
-			want:    false,
-			wantErr: true,
-		},
-		{
-			name: "EmptyDigest",
-			args: args{
-				issuer:  testIssuer,
-				subject: testSubject,
-				digest:  [32]byte{},
-				data:    []byte("eyJhbGciOiJSUzUxMiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ0ZXN0X2lzc3VlciIsInN1YiI6InRlc3Rfc3ViamVjdCIsIm5iZiI6MTczNjM0OTQzMCwiaWF0IjoxNzM2MzQ5NDMwLCJkaWdlc3QiOiIxNWM0MTZkN2JkOTg5MGY1Y2JjYzg3NTEyMjgzN2FkM2YxNGEyNTg5ZDFkMTYzYjBhNjg1Yzg2ODcwMDgyMjcwIn0.RmVuxnCntd6DVeFjTNE0-s47i5tALJ0vHgmimTPQSNoTWLM-kn8fipytFfR-yKzAPc5AwpVAE5Z3YNJ-D6C-nphnCSOch6_YDIWTVASvIbtYkCby9QMBQvemFMtq07AIIbe59O4krrp5obKmhjtyIFTm7dJiTGC9jj1JCtcR144h_egiDUdkvt3ISpii_BgbhCfVJ4xomPg_0GjknUaKeZZEs1rqZT44rH8-1DicD_eomqp7NZVTMLIiYL9RpbjlyYKbTuODqvRnkzrGhuVjCTiujgCWDVGOaBZE_ExD2XYhMhY14p5ezv3Tehp2eqvqPhZ1CHGt4cVCdcmNcAzBIw"),
-				key:     publicKey,
-			},
-			want:    false,
-			wantErr: true,
-		},
-		{
-			name: "InvalidDigest",
-			args: args{
-				issuer:  testIssuer,
-				subject: testSubject,
-				digest:  sha256.Sum256([]byte("invalid digest")),
-				data:    []byte("eyJhbGciOiJSUzUxMiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ0ZXN0X2lzc3VlciIsInN1YiI6InRlc3Rfc3ViamVjdCIsIm5iZiI6MTczNjM0OTQzMCwiaWF0IjoxNzM2MzQ5NDMwLCJkaWdlc3QiOiIxNWM0MTZkN2JkOTg5MGY1Y2JjYzg3NTEyMjgzN2FkM2YxNGEyNTg5ZDFkMTYzYjBhNjg1Yzg2ODcwMDgyMjcwIn0.RmVuxnCntd6DVeFjTNE0-s47i5tALJ0vHgmimTPQSNoTWLM-kn8fipytFfR-yKzAPc5AwpVAE5Z3YNJ-D6C-nphnCSOch6_YDIWTVASvIbtYkCby9QMBQvemFMtq07AIIbe59O4krrp5obKmhjtyIFTm7dJiTGC9jj1JCtcR144h_egiDUdkvt3ISpii_BgbhCfVJ4xomPg_0GjknUaKeZZEs1rqZT44rH8-1DicD_eomqp7NZVTMLIiYL9RpbjlyYKbTuODqvRnkzrGhuVjCTiujgCWDVGOaBZE_ExD2XYhMhY14p5ezv3Tehp2eqvqPhZ1CHGt4cVCdcmNcAzBIw"),
+				data:    testFileData,
+				token:   []byte("eyJhbGciOiJSUzUxMiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ0ZXN0X2lzc3VlciIsInN1YiI6InRlc3Rfc3ViamVjdCIsIm5iZiI6MTczNjM0OTQzMCwiaWF0IjoxNzM2MzQ5NDMwLCJkaWdlc3QiOiIxNWM0MTZkN2JkOTg5MGY1Y2JjYzg3NTEyMjgzN2FkM2YxNGEyNTg5ZDFkMTYzYjBhNjg1Yzg2ODcwMDgyMjcwIn0.RmVuxnCntd6DVeFjTNE0-s47i5tALJ0vHgmimTPQSNoTWLM-kn8fipytFfR-yKzAPc5AwpVAE5Z3YNJ-D6C-nphnCSOch6_YDIWTVASvIbtYkCby9QMBQvemFMtq07AIIbe59O4krrp5obKmhjtyIFTm7dJiTGC9jj1JCtcR144h_egiDUdkvt3ISpii_BgbhCfVJ4xomPg_0GjknUaKeZZEs1rqZT44rH8-1DicD_eomqp7NZVTMLIiYL9RpbjlyYKbTuODqvRnkzrGhuVjCTiujgCWDVGOaBZE_ExD2XYhMhY14p5ezv3Tehp2eqvqPhZ1CHGt4cVCdcmNcAzBIw"),
 				key:     publicKey,
 			},
 			want:    false,
@@ -407,8 +383,20 @@ func TestVerify(t *testing.T) {
 			args: args{
 				issuer:  testIssuer,
 				subject: testSubject,
-				digest:  testFileDigest,
 				data:    []byte{},
+				token:   []byte("eyJhbGciOiJSUzUxMiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ0ZXN0X2lzc3VlciIsInN1YiI6InRlc3Rfc3ViamVjdCIsIm5iZiI6MTczNjM0OTQzMCwiaWF0IjoxNzM2MzQ5NDMwLCJkaWdlc3QiOiIxNWM0MTZkN2JkOTg5MGY1Y2JjYzg3NTEyMjgzN2FkM2YxNGEyNTg5ZDFkMTYzYjBhNjg1Yzg2ODcwMDgyMjcwIn0.RmVuxnCntd6DVeFjTNE0-s47i5tALJ0vHgmimTPQSNoTWLM-kn8fipytFfR-yKzAPc5AwpVAE5Z3YNJ-D6C-nphnCSOch6_YDIWTVASvIbtYkCby9QMBQvemFMtq07AIIbe59O4krrp5obKmhjtyIFTm7dJiTGC9jj1JCtcR144h_egiDUdkvt3ISpii_BgbhCfVJ4xomPg_0GjknUaKeZZEs1rqZT44rH8-1DicD_eomqp7NZVTMLIiYL9RpbjlyYKbTuODqvRnkzrGhuVjCTiujgCWDVGOaBZE_ExD2XYhMhY14p5ezv3Tehp2eqvqPhZ1CHGt4cVCdcmNcAzBIw"),
+				key:     publicKey,
+			},
+			want:    false,
+			wantErr: true,
+		},
+		{
+			name: "InvalidData",
+			args: args{
+				issuer:  testIssuer,
+				subject: testSubject,
+				data:    []byte("invalid data"),
+				token:   []byte("eyJhbGciOiJSUzUxMiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ0ZXN0X2lzc3VlciIsInN1YiI6InRlc3Rfc3ViamVjdCIsIm5iZiI6MTczNjM0OTQzMCwiaWF0IjoxNzM2MzQ5NDMwLCJkaWdlc3QiOiIxNWM0MTZkN2JkOTg5MGY1Y2JjYzg3NTEyMjgzN2FkM2YxNGEyNTg5ZDFkMTYzYjBhNjg1Yzg2ODcwMDgyMjcwIn0.RmVuxnCntd6DVeFjTNE0-s47i5tALJ0vHgmimTPQSNoTWLM-kn8fipytFfR-yKzAPc5AwpVAE5Z3YNJ-D6C-nphnCSOch6_YDIWTVASvIbtYkCby9QMBQvemFMtq07AIIbe59O4krrp5obKmhjtyIFTm7dJiTGC9jj1JCtcR144h_egiDUdkvt3ISpii_BgbhCfVJ4xomPg_0GjknUaKeZZEs1rqZT44rH8-1DicD_eomqp7NZVTMLIiYL9RpbjlyYKbTuODqvRnkzrGhuVjCTiujgCWDVGOaBZE_ExD2XYhMhY14p5ezv3Tehp2eqvqPhZ1CHGt4cVCdcmNcAzBIw"),
 				key:     publicKey,
 			},
 			want:    false,
@@ -419,8 +407,44 @@ func TestVerify(t *testing.T) {
 			args: args{
 				issuer:  testIssuer,
 				subject: testSubject,
-				digest:  testFileDigest,
 				data:    nil,
+				token:   []byte("eyJhbGciOiJSUzUxMiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ0ZXN0X2lzc3VlciIsInN1YiI6InRlc3Rfc3ViamVjdCIsIm5iZiI6MTczNjM0OTQzMCwiaWF0IjoxNzM2MzQ5NDMwLCJkaWdlc3QiOiIxNWM0MTZkN2JkOTg5MGY1Y2JjYzg3NTEyMjgzN2FkM2YxNGEyNTg5ZDFkMTYzYjBhNjg1Yzg2ODcwMDgyMjcwIn0.RmVuxnCntd6DVeFjTNE0-s47i5tALJ0vHgmimTPQSNoTWLM-kn8fipytFfR-yKzAPc5AwpVAE5Z3YNJ-D6C-nphnCSOch6_YDIWTVASvIbtYkCby9QMBQvemFMtq07AIIbe59O4krrp5obKmhjtyIFTm7dJiTGC9jj1JCtcR144h_egiDUdkvt3ISpii_BgbhCfVJ4xomPg_0GjknUaKeZZEs1rqZT44rH8-1DicD_eomqp7NZVTMLIiYL9RpbjlyYKbTuODqvRnkzrGhuVjCTiujgCWDVGOaBZE_ExD2XYhMhY14p5ezv3Tehp2eqvqPhZ1CHGt4cVCdcmNcAzBIw"),
+				key:     publicKey,
+			},
+			want:    false,
+			wantErr: true,
+		},
+		{
+			name: "EmptyToken",
+			args: args{
+				issuer:  testIssuer,
+				subject: testSubject,
+				data:    testFileData,
+				token:   []byte{},
+				key:     publicKey,
+			},
+			want:    false,
+			wantErr: true,
+		},
+		{
+			name: "InvalidToken",
+			args: args{
+				issuer:  testIssuer,
+				subject: testSubject,
+				data:    testFileData,
+				token:   []byte("this is not a JWT"),
+				key:     publicKey,
+			},
+			want:    false,
+			wantErr: true,
+		},
+		{
+			name: "NilToken",
+			args: args{
+				issuer:  testIssuer,
+				subject: testSubject,
+				data:    testFileData,
+				token:   nil,
 				key:     publicKey,
 			},
 			want:    false,
@@ -431,8 +455,8 @@ func TestVerify(t *testing.T) {
 			args: args{
 				issuer:  testIssuer,
 				subject: testSubject,
-				digest:  testFileDigest,
-				data:    []byte("eyJhbGciOiJSUzUxMiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ0ZXN0X2lzc3VlciIsInN1YiI6InRlc3Rfc3ViamVjdCIsIm5iZiI6MTczNjM0OTQzMCwiaWF0IjoxNzM2MzQ5NDMwLCJkaWdlc3QiOiIxNWM0MTZkN2JkOTg5MGY1Y2JjYzg3NTEyMjgzN2FkM2YxNGEyNTg5ZDFkMTYzYjBhNjg1Yzg2ODcwMDgyMjcwIn0.RmVuxnCntd6DVeFjTNE0-s47i5tALJ0vHgmimTPQSNoTWLM-kn8fipytFfR-yKzAPc5AwpVAE5Z3YNJ-D6C-nphnCSOch6_YDIWTVASvIbtYkCby9QMBQvemFMtq07AIIbe59O4krrp5obKmhjtyIFTm7dJiTGC9jj1JCtcR144h_egiDUdkvt3ISpii_BgbhCfVJ4xomPg_0GjknUaKeZZEs1rqZT44rH8-1DicD_eomqp7NZVTMLIiYL9RpbjlyYKbTuODqvRnkzrGhuVjCTiujgCWDVGOaBZE_ExD2XYhMhY14p5ezv3Tehp2eqvqPhZ1CHGt4cVCdcmNcAzBIw"),
+				data:    testFileData,
+				token:   []byte("eyJhbGciOiJSUzUxMiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ0ZXN0X2lzc3VlciIsInN1YiI6InRlc3Rfc3ViamVjdCIsIm5iZiI6MTczNjM0OTQzMCwiaWF0IjoxNzM2MzQ5NDMwLCJkaWdlc3QiOiIxNWM0MTZkN2JkOTg5MGY1Y2JjYzg3NTEyMjgzN2FkM2YxNGEyNTg5ZDFkMTYzYjBhNjg1Yzg2ODcwMDgyMjcwIn0.RmVuxnCntd6DVeFjTNE0-s47i5tALJ0vHgmimTPQSNoTWLM-kn8fipytFfR-yKzAPc5AwpVAE5Z3YNJ-D6C-nphnCSOch6_YDIWTVASvIbtYkCby9QMBQvemFMtq07AIIbe59O4krrp5obKmhjtyIFTm7dJiTGC9jj1JCtcR144h_egiDUdkvt3ISpii_BgbhCfVJ4xomPg_0GjknUaKeZZEs1rqZT44rH8-1DicD_eomqp7NZVTMLIiYL9RpbjlyYKbTuODqvRnkzrGhuVjCTiujgCWDVGOaBZE_ExD2XYhMhY14p5ezv3Tehp2eqvqPhZ1CHGt4cVCdcmNcAzBIw"),
 				key:     nil,
 			},
 			want:    false,
@@ -442,7 +466,7 @@ func TestVerify(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := integrity.Verify(tt.args.issuer, tt.args.subject, tt.args.digest, tt.args.data, tt.args.key)
+			got, err := integrity.Verify(tt.args.issuer, tt.args.subject, tt.args.data, tt.args.token, tt.args.key)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Verify() error = %v, wantErr %v", err, tt.wantErr)
 				return
