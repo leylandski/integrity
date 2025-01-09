@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path"
@@ -107,7 +108,7 @@ func VerifyManifest(issuer, manifestPath, root string, key *rsa.PublicKey) (bool
 
 		for i := 0; i < 32; i++ {
 			if digest[i] != claimDigest[i] {
-				return false, errors.New("digests do not match")
+				return false, fmt.Errorf("digests do not match for %s", k)
 			}
 		}
 	}
