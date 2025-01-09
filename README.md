@@ -6,7 +6,7 @@ Integrity is a very small golang package and command line tool for [verifying th
 
 The JWT contained within the integrity file is itself signed using RS512, signed with an RSA private key, and its authenticity and integrity can be verified by anyone who holds a corresponding public key. **Only** the party with the private key may generate a valid, authentic integrity file.
 
-This package itself is very small, but mainly because it uses [github.com/golang-jwt/jwt/v5](github.com/golang-jwt/jwt/v5) for a majority of the heavy lifting.
+This package itself is very small, but mainly because it uses [github.com/golang-jwt/jwt/v5](https://github.com/golang-jwt/jwt/v5) for a majority of the heavy lifting.
 
 ## Using the golang library
 ### Prerequisites
