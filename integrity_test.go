@@ -2,8 +2,9 @@ package integrity_test
 
 import (
 	"crypto/rsa"
-	"crypto/sha256"
+	"errors"
 	"os"
+	"path"
 	"reflect"
 	"testing"
 	"time"
@@ -14,20 +15,23 @@ import (
 )
 
 const (
-	testIssuer        = "test_issuer"
-	testSubject       = "test_subject"
-	testFilePath      = "test.temp"
-	testIntegrityPath = "test_integrity.temp"
+	testIssuer     = "test.issuer"
+	testFolderName = "_test"
 )
 
 var (
-	testFileData      = []byte("Hello, I am some test file data.")
-	testFileDigest    = sha256.Sum256(testFileData) // Should be 15c416d7bd9890f5cbcc875122837ad3f14a2589d1d163b0a685c86870082270
-	testIntegrityData = []byte("eyJhbGciOiJSUzUxMiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ0ZXN0X2lzc3VlciIsInN1YiI6InRlc3QudGVtcCIsIm5iZiI6MTczNjM0OTQzMCwiaWF0IjoxNzM2MzQ5NDMwLCJkaWdlc3QiOiIxNWM0MTZkN2JkOTg5MGY1Y2JjYzg3NTEyMjgzN2FkM2YxNGEyNTg5ZDFkMTYzYjBhNjg1Yzg2ODcwMDgyMjcwIn0.QIPjoKqt2kZ2iW4evv28CkodLZd0sKrZM7_qAK_-gLRRLXwDh_eNYzpfXXlggmcNwmlxTrGJsVOv2F4UdLUKMrImbgNICXGNFQxa7BWzFxMKtEOZ12Du8aH5Nka08FHt9GbliZ21yldswXaVM6OtDiGWJcDoX6KQFDgBNQCSlU0Si3E7Y4jyiyWwT_NgMUP_8X1v-fQr3249FmSHR4kllbUKY2OaNU5FCi9XefEIcHHWAZtzIynmFQjZFwHRDXMT9cg87xJxwig-rkoqncHRESczQdU0fvhjH7ARfC7VjKEBMGu0uvLSPjpEN0oV-NXRzh7uKMFgnaG1-_LlJRm60Q")
-)
+	testFileData = map[string]string{
+		"test.1": "1234567890",
+		"test.2": "abcdefghijklmnopqrstuvwxyz",
+		"test.3": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii",
+	}
+	testManifestData = map[string]string{
+		"valid.integrity":             "eyJhbGciOiJSUzUxMiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ0ZXN0Lmlzc3VlciIsImlhdCI6MTczNjM0OTQzMCwibWFuaWZlc3QiOnsiX3Rlc3QvdGVzdC4xIjoiYzc3NWU3Yjc1N2VkZTYzMGNkMGFhMTExM2JkMTAyNjYxYWIzODgyOWNhNTJhNjQyMmFiNzgyODYyZjI2ODY0NiIsIl90ZXN0L3Rlc3QuMiI6IjcxYzQ4MGRmOTNkNmFlMmYxZWZhZDE0NDdjNjZjOTUyNWUzMTYyMThjZjUxZmM4ZDllZDgzMmYyZGFmMThiNzMiLCJfdGVzdC90ZXN0LjMiOiJiMWI0N2Y1ZGU3YTM4MjRmN2I0NGQyMDFlY2I3YjU3NzBiZDQwNzEwMGQ0NDdmNGQ4Nzk5YzAxZDQzNDdhNjBkIn19.fBbTLr9J_UNmnb_Ef9HpcEuhARB-4IV3FjwMElx5L-VavEIPPCcYSqyRlJJBhpg3Z1dQvFnVBk3O7mm9A4J5WZM1wdjiqj_8BTQdFgh5-ARADUBqQpDfdoa_amBi_sXO1PDftN7a-4JkdkFhj4bkRrqdzx_N_KIIODzx9sdNjY9UgQ3sCuIro7nVPTmA123pErmqfsUT8XuyZP_p20Qt40sVs7omZr3zU_LAdzpcnurpC0fWUPywD8f7bR_Ox81C8SXUV8P2Z7dlkelDYDV2ltAqmgLl4YPtwS-imK9ZgzaqMUiB927NRTeQWaq-I-ZHX5mvKro03W5zEZihrbUG7w",
+		"invalid_signature.integrity": "eyJhbGciOiJSUzUxMiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ0ZXN0Lmlzc3VlciIsImlhdCI6MTczNjM0OTQzMCwibWFuaWZlc3QiOnsiX3Rlc3QvdGVzdC4xIjoiYzc3NWU3Yjc1N2VkZTYzMGNkMGFhMTExM2JkMTAyNjYxYWIzODgyOWNhNTJhNjQyMmFiNzgyODYyZjI2ODY0NiIsIl90ZXN0L3Rlc3QuMiI6IjcxYzQ4MGRmOTNkNmFlMmYxZWZhZDE0NDdjNjZjOTUyNWUzMTYyMThjZjUxZmM4ZDllZDgzMmYyZGFmMThiNzMiLCJfdGVzdC90ZXN0LjMiOiJiMWI0N2Y1ZGU3YTM4MjRmN2I0NGQyMDFlY2I3YjU3NzBiZDQwNzEwMGQ0NDdmNGQ4Nzk5YzAxZDQzNDdhNjBkIn19.fBbTLr9J_UNmnb_Ef9HpcEuhARB-4IV3FjwMElx5L-VavEIPPCcYSqyRlJJBhpg3Z1dQvFnVBk3O7mm9A4J5WZM1wdjiqj_8BTQdFgh5-ARADUBqQpDfdoa_amBi_sXO1PDftN7a-4JkdkFhj4bkRrqdzx_N_KIIODzx9sdjY9UgQ3sCuIro7nVPTmA123pErmqfsUT8XuyZP_p20Qt40sVs7omZr3zU_LAdzpcnurpC0fWUPywD8f7bR_Ox81C8SXUV8P2Z7dlkelDYDV2ltAqmgLl4YPtwS-imK9ZgzaqMUiB927NRTeQWaq-I-ZHX5mvKro03W5zEZihrbUG7w",
+		"invalid_digest.integrity":    "eyJhbGciOiJSUzUxMiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ0ZXN0Lmlzc3VlciIsImlhdCI6MTczNjM0OTQzMCwibWFuaWZlc3QiOnsiX3Rlc3QvdGVzdC4xIjoiYzc3NWU3Yjc1N2UzMGNkMGFhMTExM2JkMTAyNjYxYWIzODgyOWNhNTJhNjQyMmFiNzgyODYyZjI2ODY0NiIsIl90ZXN0L3Rlc3QuMiI6IjcxYzQ4MGRmOTNkNmFlMmYxZWZhZDE0NDdjNjZjOTUyNWUzMTYyMThjZjUxZmM4ZDllZDgzMmYyZGFmMThiNzMiLCJfdGVzdC90ZXN0LjMiOiJiMWI0N2Y1ZGU3YTM4MjRmN2I0NGQyMDFlY2I3YjU3NzBiZDQwNzEwMGQ0NDdmNGQ4Nzk5YzAxZDQzNDdhNjBkIn19.jL_3_YOEC1Z5M1mQzlKv1sMzCw8400Zd3Q0XJBSgXArajLSSbpkMe1OcWiaPx1KCwuumtMhDDlm7kxQVHRT68_btlrSabRKWOlvYyL2J2t_HBd8Q48chHoRIGRXq8oM1l3CoqMkVIsLlCoFeSzjxvVHCHxnkaqBvrngg2LbFYh-ssblFV8AOeEzyQqZSC_6moZbnQnrH25654NWHheHDYWxFByZOOD5B7W53aMtgeGtJ1q3P_5QZxOJXZPus71RZReXnJaGH5UzOP5dTS_OCeiX0UvaK-MvNiK7AbtAUMKRhFdsABJUkuP_hwXFm_cbmTm1STQzeAvAKg6TEhs_avw",
+	}
 
-// If you change these keys have fun regenerating all the test data.
-var (
+	// Obviously don't use these keys for anything else.
 	publicKeyData = []byte(`-----BEGIN PUBLIC KEY-----
 MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAm4jcJXuPpUdBXvjzfF7C
 bFzTY5o+2qMCsO4kDpWefbiyTiL44XP2cZo1GWPZRw7EXtOksR+Bi5KHPad6NQdD
@@ -36,8 +40,7 @@ AhiFelTY90lPguW6KbFKrCQQnxrSXhkrlxbQ9Tx2b2nc50R/WgQfTW1hai15/eZP
 Tq6h6qZnRQJWJv1MnkE/ii7fEfK4pjzKm+cWMTH4NT3snMJdEiyM9cpAyAUzHWYa
 /RV2zJqc/0kdbMaJ+EF4Xs2SWDGTOpFBShba3E6cTxY3JeQ1TroZNTWr+vqHbhJc
 gwIDAQAB
------END PUBLIC KEY-----
-`)
+-----END PUBLIC KEY-----`)
 
 	privateKeyData = []byte(`-----BEGIN RSA PRIVATE KEY-----
 MIIEpAIBAAKCAQEAm4jcJXuPpUdBXvjzfF7CbFzTY5o+2qMCsO4kDpWefbiyTiL4
@@ -65,8 +68,7 @@ XdJOX4E88YdKBQJB4rjTZQKBgQCK8/lMC8491jHMacVtmCMBzXv9/QpiXPGI6spp
 FMvMhQKBgQDEk3+Y7KLpaqNncAeEr67ZzGLxKqxifuc6w8FCY2I6Y9Yhfkatjw9W
 KeoODaVrgjiBurr8QzngY0U2N/k2WUEB036mHFOu13lE2Iff+Gs3LszjR92bBnez
 Dw7YaJjb7we/vdEAAoth5aMxNybWVOg4iIT/SWsTix7woZqAXrRPVQ==
------END RSA PRIVATE KEY-----
-`)
+-----END RSA PRIVATE KEY-----`)
 )
 
 var now = time.Unix(1736349430, 0)
@@ -87,158 +89,65 @@ func getTestPrivateKey() *rsa.PrivateKey {
 	return key
 }
 
-func createTestDataFile() {
-	testFile, err := os.Create(testFilePath)
-	if err != nil {
-		panic("unable to create temporary test data file")
+func generateTestDataFiles() {
+	err := os.Mkdir(testFolderName, 0755)
+	if err != nil && !os.IsExist(err) {
+		panic(err)
 	}
-	defer testFile.Close()
 
-	if n, err := testFile.Write(testFileData); err != nil {
-		panic("unable to write test data to file: " + err.Error())
-	} else if n != len(testFileData) {
-		panic("did not write the expected number of bytes to the test data file")
+	genFile := func(name string, data []byte) error {
+		f, err := os.Create(path.Join(testFolderName, name))
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+
+		if n, err := f.Write(data); err != nil {
+			return err
+		} else if n != len(data) {
+			return errors.New("did not write the expected number of bytes to the test data file")
+		}
+
+		return nil
 	}
-}
 
-func deleteTestDataFile() {
-	if err := os.Remove(testFilePath); err != nil {
-		panic("failed to clean up test file: " + err.Error())
+	for k := range testFileData {
+		if err = genFile(k, []byte(testFileData[k])); err != nil {
+			removeTestDataFiles()
+			panic(err)
+		}
 	}
-}
 
-func createTestIntegrityFile() {
-	testFile, err := os.Create(testIntegrityPath)
-	if err != nil {
-		panic("unable to create temporary test integrity file")
-	}
-	defer testFile.Close()
-
-	if n, err := testFile.Write(testIntegrityData); err != nil {
-		panic("unable to write test integrity file: " + err.Error())
-	} else if n != len(testIntegrityData) {
-		panic("did not write the expected number of bytes to the test data file")
-	}
-}
-
-func deleteTestIntegrityFile() {
-	if err := os.Remove(testIntegrityPath); err != nil {
-		panic("failed to clean up test integrity file: " + err.Error())
+	for k := range testManifestData {
+		if err = genFile(k, []byte(testManifestData[k])); err != nil {
+			removeTestDataFiles()
+			panic(err)
+		}
 	}
 }
 
-func TestSign(t *testing.T) {
+func removeTestDataFiles() {
+	for k := range testFileData {
+		os.Remove(path.Join(testFolderName, k))
+	}
+	for k := range testManifestData {
+		os.Remove(path.Join(testFolderName, k))
+	}
+	os.Remove(testFolderName + string(os.PathSeparator))
+}
+
+func TestGenerateManifest(t *testing.T) {
 	integrity.WithNowFunc(func() time.Time {
 		return now
 	})
 	var privateKey = getTestPrivateKey()
 
-	type args struct {
-		issuer  string
-		subject string
-		data    []byte
-		key     *rsa.PrivateKey
-	}
-	tests := []struct {
-		name    string
-		args    args
-		want    []byte
-		wantErr bool
-	}{
-		{
-			name: "Success",
-			args: args{
-				issuer:  testIssuer,
-				subject: testSubject,
-				data:    testFileData,
-				key:     privateKey,
-			},
-			want:    []byte("eyJhbGciOiJSUzUxMiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ0ZXN0X2lzc3VlciIsInN1YiI6InRlc3Rfc3ViamVjdCIsIm5iZiI6MTczNjM0OTQzMCwiaWF0IjoxNzM2MzQ5NDMwLCJkaWdlc3QiOiIxNWM0MTZkN2JkOTg5MGY1Y2JjYzg3NTEyMjgzN2FkM2YxNGEyNTg5ZDFkMTYzYjBhNjg1Yzg2ODcwMDgyMjcwIn0.RmVuxnCntd6DVeFjTNE0-s47i5tALJ0vHgmimTPQSNoTWLM-kn8fipytFfR-yKzAPc5AwpVAE5Z3YNJ-D6C-nphnCSOch6_YDIWTVASvIbtYkCby9QMBQvemFMtq07AIIbe59O4krrp5obKmhjtyIFTm7dJiTGC9jj1JCtcR144h_egiDUdkvt3ISpii_BgbhCfVJ4xomPg_0GjknUaKeZZEs1rqZT44rH8-1DicD_eomqp7NZVTMLIiYL9RpbjlyYKbTuODqvRnkzrGhuVjCTiujgCWDVGOaBZE_ExD2XYhMhY14p5ezv3Tehp2eqvqPhZ1CHGt4cVCdcmNcAzBIw"),
-			wantErr: false,
-		},
-		{
-			name: "EmptyIssuer",
-			args: args{
-				issuer:  "",
-				subject: testSubject,
-				data:    testFileData,
-				key:     privateKey,
-			},
-			want:    nil,
-			wantErr: true,
-		},
-		{
-			name: "EmptySubject",
-			args: args{
-				issuer:  testIssuer,
-				subject: "",
-				data:    testFileData,
-				key:     privateKey,
-			},
-			want:    nil,
-			wantErr: true,
-		},
-		{
-			name: "EmptyData",
-			args: args{
-				issuer:  testIssuer,
-				subject: testSubject,
-				data:    []byte{},
-				key:     privateKey,
-			},
-			want:    nil,
-			wantErr: true,
-		},
-		{
-			name: "NilData",
-			args: args{
-				issuer:  testIssuer,
-				subject: testSubject,
-				data:    nil,
-				key:     privateKey,
-			},
-			want:    nil,
-			wantErr: true,
-		},
-		{
-			name: "NilKey",
-			args: args{
-				issuer:  testIssuer,
-				subject: testSubject,
-				data:    testFileData,
-				key:     nil,
-			},
-			want:    nil,
-			wantErr: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := integrity.Sign(tt.args.issuer, tt.args.subject, tt.args.data, tt.args.key)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Sign() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("Sign() got = %v, want %v", string(got), string(tt.want))
-			}
-		})
-	}
-}
-
-func TestSignFile(t *testing.T) {
-	integrity.WithNowFunc(func() time.Time {
-		return now
-	})
-	var privateKey = getTestPrivateKey()
-
-	createTestDataFile()
-	defer deleteTestDataFile()
+	generateTestDataFiles()
+	defer removeTestDataFiles()
 
 	type args struct {
 		issuer string
-		path   string
+		paths  []string
 		key    *rsa.PrivateKey
 	}
 	tests := []struct {
@@ -251,58 +160,88 @@ func TestSignFile(t *testing.T) {
 			name: "Success",
 			args: args{
 				issuer: testIssuer,
-				path:   testFilePath,
-				key:    privateKey,
+				paths: []string{
+					"_test/test.1",
+					"_test/test.2",
+					"_test/test.3",
+				},
+				key: privateKey,
 			},
-			want:    []byte("eyJhbGciOiJSUzUxMiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ0ZXN0X2lzc3VlciIsInN1YiI6InRlc3QudGVtcCIsIm5iZiI6MTczNjM0OTQzMCwiaWF0IjoxNzM2MzQ5NDMwLCJkaWdlc3QiOiIxNWM0MTZkN2JkOTg5MGY1Y2JjYzg3NTEyMjgzN2FkM2YxNGEyNTg5ZDFkMTYzYjBhNjg1Yzg2ODcwMDgyMjcwIn0.QIPjoKqt2kZ2iW4evv28CkodLZd0sKrZM7_qAK_-gLRRLXwDh_eNYzpfXXlggmcNwmlxTrGJsVOv2F4UdLUKMrImbgNICXGNFQxa7BWzFxMKtEOZ12Du8aH5Nka08FHt9GbliZ21yldswXaVM6OtDiGWJcDoX6KQFDgBNQCSlU0Si3E7Y4jyiyWwT_NgMUP_8X1v-fQr3249FmSHR4kllbUKY2OaNU5FCi9XefEIcHHWAZtzIynmFQjZFwHRDXMT9cg87xJxwig-rkoqncHRESczQdU0fvhjH7ARfC7VjKEBMGu0uvLSPjpEN0oV-NXRzh7uKMFgnaG1-_LlJRm60Q"),
+			want:    []byte("eyJhbGciOiJSUzUxMiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ0ZXN0Lmlzc3VlciIsImlhdCI6MTczNjM0OTQzMCwibWFuaWZlc3QiOnsiX3Rlc3QvdGVzdC4xIjoiYzc3NWU3Yjc1N2VkZTYzMGNkMGFhMTExM2JkMTAyNjYxYWIzODgyOWNhNTJhNjQyMmFiNzgyODYyZjI2ODY0NiIsIl90ZXN0L3Rlc3QuMiI6IjcxYzQ4MGRmOTNkNmFlMmYxZWZhZDE0NDdjNjZjOTUyNWUzMTYyMThjZjUxZmM4ZDllZDgzMmYyZGFmMThiNzMiLCJfdGVzdC90ZXN0LjMiOiJiMWI0N2Y1ZGU3YTM4MjRmN2I0NGQyMDFlY2I3YjU3NzBiZDQwNzEwMGQ0NDdmNGQ4Nzk5YzAxZDQzNDdhNjBkIn19.fBbTLr9J_UNmnb_Ef9HpcEuhARB-4IV3FjwMElx5L-VavEIPPCcYSqyRlJJBhpg3Z1dQvFnVBk3O7mm9A4J5WZM1wdjiqj_8BTQdFgh5-ARADUBqQpDfdoa_amBi_sXO1PDftN7a-4JkdkFhj4bkRrqdzx_N_KIIODzx9sdNjY9UgQ3sCuIro7nVPTmA123pErmqfsUT8XuyZP_p20Qt40sVs7omZr3zU_LAdzpcnurpC0fWUPywD8f7bR_Ox81C8SXUV8P2Z7dlkelDYDV2ltAqmgLl4YPtwS-imK9ZgzaqMUiB927NRTeQWaq-I-ZHX5mvKro03W5zEZihrbUG7w"),
 			wantErr: false,
 		},
 		{
 			name: "EmptyIssuer",
 			args: args{
 				issuer: "",
-				path:   testFilePath,
+				paths: []string{
+					"_test/test.1",
+					"_test/test.2",
+					"_test/test.3",
+				},
+				key: privateKey,
+			},
+			want:    nil,
+			wantErr: true,
+		},
+		{
+			name: "NilPaths",
+			args: args{
+				issuer: testIssuer,
+				paths:  nil,
 				key:    privateKey,
 			},
 			want:    nil,
 			wantErr: true,
 		},
 		{
-			name: "EmptyPath",
+			name: "EmptyPaths",
 			args: args{
 				issuer: testIssuer,
-				path:   "",
+				paths:  []string{},
 				key:    privateKey,
 			},
 			want:    nil,
 			wantErr: true,
 		},
 		{
-			name: "WrongPath",
+			name: "InvalidPaths",
 			args: args{
 				issuer: testIssuer,
-				path:   "there_is_no_file_here.incomprehensible", // Try not to name a file this, if you can help it.
-				key:    privateKey,
+				paths: []string{
+					"_test/test.4",
+					"_test/test.5",
+					"_test/test.6",
+				},
+				key: privateKey,
 			},
 			want:    nil,
 			wantErr: true,
 		},
 		{
-			name: "InvalidPath",
+			name: "DuplicatePaths",
 			args: args{
 				issuer: testIssuer,
-				path:   "invalid/\nfile#path*$£!!()*&)_-+=][{}#'/?.,>,<,",
-				key:    privateKey,
+				paths: []string{
+					"_test/test.1",
+					"_test/test.1",
+					"_test/test.1",
+				},
+				key: privateKey,
 			},
-			want:    nil,
-			wantErr: true,
+			want:    []byte("eyJhbGciOiJSUzUxMiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ0ZXN0Lmlzc3VlciIsImlhdCI6MTczNjM0OTQzMCwibWFuaWZlc3QiOnsiX3Rlc3QvdGVzdC4xIjoiYzc3NWU3Yjc1N2VkZTYzMGNkMGFhMTExM2JkMTAyNjYxYWIzODgyOWNhNTJhNjQyMmFiNzgyODYyZjI2ODY0NiJ9fQ.lsQhNJ6fkxIW56N1XcIHKDBFFp0G608A9fI-LZ3PcJ24vj8hJy0rgj30XZMR5538mv9QXqXDhbndlKan7OF0xphrbTMxEXQiQ8C266oA72XgmWtDDsoKXYK0_Aj1ifl15uAezOH1HJC_ehdeIrBpXHbivmAlopJEIfjoCBBomKTnEY-013XYFmMz5cYdGLBvXZWuVz1pnbgK38XTdWfIo5ijklVUEqTjVIJBk-WzTsPiIK3PgSHQtR_p9Bwyg3KXTB5Oo12gV7QCfKT_DRvwEBCnOEtr9ufpmHwFDfuNsCzt5DUBrc1Uqojb-8dCcBoSByJmArGv-JDlC42BYYSNFQ"),
+			wantErr: false,
 		},
 		{
 			name: "NilKey",
 			args: args{
 				issuer: testIssuer,
-				path:   testFilePath,
-				key:    nil,
+				paths: []string{
+					"_test/test.1",
+					"_test/test.2",
+					"_test/test.3",
+				},
+				key: nil,
 			},
 			want:    nil,
 			wantErr: true,
@@ -311,30 +250,32 @@ func TestSignFile(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := integrity.SignFile(tt.args.issuer, tt.args.path, tt.args.key)
+			got, err := integrity.GenerateManifest(tt.args.issuer, tt.args.paths, tt.args.key)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("SignFile() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("GenerateManifest() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("SignFile() got = %v, want %v", string(got), string(tt.want))
+				t.Errorf("GenerateManifest() got = %v, want %v", string(got), string(tt.want))
 			}
 		})
 	}
 }
 
-func TestVerify(t *testing.T) {
+func TestVerifyManifest(t *testing.T) {
 	integrity.WithNowFunc(func() time.Time {
 		return now
 	})
 	var publicKey = getTestPublicKey()
 
+	generateTestDataFiles()
+	defer removeTestDataFiles()
+
 	type args struct {
-		issuer  string
-		subject string
-		data    []byte
-		token   []byte
-		key     *rsa.PublicKey
+		issuer       string
+		manifestPath string
+		root         string
+		key          *rsa.PublicKey
 	}
 	tests := []struct {
 		name    string
@@ -345,11 +286,32 @@ func TestVerify(t *testing.T) {
 		{
 			name: "Success",
 			args: args{
-				issuer:  testIssuer,
-				subject: testSubject,
-				data:    testFileData,
-				token:   []byte("eyJhbGciOiJSUzUxMiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ0ZXN0X2lzc3VlciIsInN1YiI6InRlc3Rfc3ViamVjdCIsIm5iZiI6MTczNjM0OTQzMCwiaWF0IjoxNzM2MzQ5NDMwLCJkaWdlc3QiOiIxNWM0MTZkN2JkOTg5MGY1Y2JjYzg3NTEyMjgzN2FkM2YxNGEyNTg5ZDFkMTYzYjBhNjg1Yzg2ODcwMDgyMjcwIn0.RmVuxnCntd6DVeFjTNE0-s47i5tALJ0vHgmimTPQSNoTWLM-kn8fipytFfR-yKzAPc5AwpVAE5Z3YNJ-D6C-nphnCSOch6_YDIWTVASvIbtYkCby9QMBQvemFMtq07AIIbe59O4krrp5obKmhjtyIFTm7dJiTGC9jj1JCtcR144h_egiDUdkvt3ISpii_BgbhCfVJ4xomPg_0GjknUaKeZZEs1rqZT44rH8-1DicD_eomqp7NZVTMLIiYL9RpbjlyYKbTuODqvRnkzrGhuVjCTiujgCWDVGOaBZE_ExD2XYhMhY14p5ezv3Tehp2eqvqPhZ1CHGt4cVCdcmNcAzBIw"),
-				key:     publicKey,
+				issuer:       testIssuer,
+				manifestPath: "_test/valid.integrity",
+				root:         "",
+				key:          publicKey,
+			},
+			want:    true,
+			wantErr: false,
+		},
+		{
+			name: "SuccessWithRoot",
+			args: args{
+				issuer:       testIssuer,
+				manifestPath: "valid.integrity",
+				root:         "_test",
+				key:          publicKey,
+			},
+			want:    true,
+			wantErr: false,
+		},
+		{
+			name: "SuccessWithRootSlash",
+			args: args{
+				issuer:       testIssuer,
+				manifestPath: "valid.integrity",
+				root:         "_test/",
+				key:          publicKey,
 			},
 			want:    true,
 			wantErr: false,
@@ -357,95 +319,43 @@ func TestVerify(t *testing.T) {
 		{
 			name: "EmptyIssuer",
 			args: args{
-				issuer:  "",
-				subject: testSubject,
-				data:    testFileData,
-				token:   []byte("eyJhbGciOiJSUzUxMiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ0ZXN0X2lzc3VlciIsInN1YiI6InRlc3Rfc3ViamVjdCIsIm5iZiI6MTczNjM0OTQzMCwiaWF0IjoxNzM2MzQ5NDMwLCJkaWdlc3QiOiIxNWM0MTZkN2JkOTg5MGY1Y2JjYzg3NTEyMjgzN2FkM2YxNGEyNTg5ZDFkMTYzYjBhNjg1Yzg2ODcwMDgyMjcwIn0.RmVuxnCntd6DVeFjTNE0-s47i5tALJ0vHgmimTPQSNoTWLM-kn8fipytFfR-yKzAPc5AwpVAE5Z3YNJ-D6C-nphnCSOch6_YDIWTVASvIbtYkCby9QMBQvemFMtq07AIIbe59O4krrp5obKmhjtyIFTm7dJiTGC9jj1JCtcR144h_egiDUdkvt3ISpii_BgbhCfVJ4xomPg_0GjknUaKeZZEs1rqZT44rH8-1DicD_eomqp7NZVTMLIiYL9RpbjlyYKbTuODqvRnkzrGhuVjCTiujgCWDVGOaBZE_ExD2XYhMhY14p5ezv3Tehp2eqvqPhZ1CHGt4cVCdcmNcAzBIw"),
-				key:     publicKey,
+				issuer:       "",
+				manifestPath: "_test/valid.integrity",
+				root:         "",
+				key:          publicKey,
 			},
 			want:    false,
 			wantErr: true,
 		},
 		{
-			name: "EmptySubject",
+			name: "InvalidIssuer",
 			args: args{
-				issuer:  testIssuer,
-				subject: "",
-				data:    testFileData,
-				token:   []byte("eyJhbGciOiJSUzUxMiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ0ZXN0X2lzc3VlciIsInN1YiI6InRlc3Rfc3ViamVjdCIsIm5iZiI6MTczNjM0OTQzMCwiaWF0IjoxNzM2MzQ5NDMwLCJkaWdlc3QiOiIxNWM0MTZkN2JkOTg5MGY1Y2JjYzg3NTEyMjgzN2FkM2YxNGEyNTg5ZDFkMTYzYjBhNjg1Yzg2ODcwMDgyMjcwIn0.RmVuxnCntd6DVeFjTNE0-s47i5tALJ0vHgmimTPQSNoTWLM-kn8fipytFfR-yKzAPc5AwpVAE5Z3YNJ-D6C-nphnCSOch6_YDIWTVASvIbtYkCby9QMBQvemFMtq07AIIbe59O4krrp5obKmhjtyIFTm7dJiTGC9jj1JCtcR144h_egiDUdkvt3ISpii_BgbhCfVJ4xomPg_0GjknUaKeZZEs1rqZT44rH8-1DicD_eomqp7NZVTMLIiYL9RpbjlyYKbTuODqvRnkzrGhuVjCTiujgCWDVGOaBZE_ExD2XYhMhY14p5ezv3Tehp2eqvqPhZ1CHGt4cVCdcmNcAzBIw"),
-				key:     publicKey,
+				issuer:       "invalid",
+				manifestPath: "_test/valid.integrity",
+				root:         "",
+				key:          publicKey,
 			},
 			want:    false,
 			wantErr: true,
 		},
 		{
-			name: "EmptyData",
+			name: "EmptyManifestPath",
 			args: args{
-				issuer:  testIssuer,
-				subject: testSubject,
-				data:    []byte{},
-				token:   []byte("eyJhbGciOiJSUzUxMiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ0ZXN0X2lzc3VlciIsInN1YiI6InRlc3Rfc3ViamVjdCIsIm5iZiI6MTczNjM0OTQzMCwiaWF0IjoxNzM2MzQ5NDMwLCJkaWdlc3QiOiIxNWM0MTZkN2JkOTg5MGY1Y2JjYzg3NTEyMjgzN2FkM2YxNGEyNTg5ZDFkMTYzYjBhNjg1Yzg2ODcwMDgyMjcwIn0.RmVuxnCntd6DVeFjTNE0-s47i5tALJ0vHgmimTPQSNoTWLM-kn8fipytFfR-yKzAPc5AwpVAE5Z3YNJ-D6C-nphnCSOch6_YDIWTVASvIbtYkCby9QMBQvemFMtq07AIIbe59O4krrp5obKmhjtyIFTm7dJiTGC9jj1JCtcR144h_egiDUdkvt3ISpii_BgbhCfVJ4xomPg_0GjknUaKeZZEs1rqZT44rH8-1DicD_eomqp7NZVTMLIiYL9RpbjlyYKbTuODqvRnkzrGhuVjCTiujgCWDVGOaBZE_ExD2XYhMhY14p5ezv3Tehp2eqvqPhZ1CHGt4cVCdcmNcAzBIw"),
-				key:     publicKey,
+				issuer:       testIssuer,
+				manifestPath: "",
+				root:         "",
+				key:          publicKey,
 			},
 			want:    false,
 			wantErr: true,
 		},
 		{
-			name: "InvalidData",
+			name: "InvalidManifestPath",
 			args: args{
-				issuer:  testIssuer,
-				subject: testSubject,
-				data:    []byte("invalid data"),
-				token:   []byte("eyJhbGciOiJSUzUxMiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ0ZXN0X2lzc3VlciIsInN1YiI6InRlc3Rfc3ViamVjdCIsIm5iZiI6MTczNjM0OTQzMCwiaWF0IjoxNzM2MzQ5NDMwLCJkaWdlc3QiOiIxNWM0MTZkN2JkOTg5MGY1Y2JjYzg3NTEyMjgzN2FkM2YxNGEyNTg5ZDFkMTYzYjBhNjg1Yzg2ODcwMDgyMjcwIn0.RmVuxnCntd6DVeFjTNE0-s47i5tALJ0vHgmimTPQSNoTWLM-kn8fipytFfR-yKzAPc5AwpVAE5Z3YNJ-D6C-nphnCSOch6_YDIWTVASvIbtYkCby9QMBQvemFMtq07AIIbe59O4krrp5obKmhjtyIFTm7dJiTGC9jj1JCtcR144h_egiDUdkvt3ISpii_BgbhCfVJ4xomPg_0GjknUaKeZZEs1rqZT44rH8-1DicD_eomqp7NZVTMLIiYL9RpbjlyYKbTuODqvRnkzrGhuVjCTiujgCWDVGOaBZE_ExD2XYhMhY14p5ezv3Tehp2eqvqPhZ1CHGt4cVCdcmNcAzBIw"),
-				key:     publicKey,
-			},
-			want:    false,
-			wantErr: true,
-		},
-		{
-			name: "NilData",
-			args: args{
-				issuer:  testIssuer,
-				subject: testSubject,
-				data:    nil,
-				token:   []byte("eyJhbGciOiJSUzUxMiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ0ZXN0X2lzc3VlciIsInN1YiI6InRlc3Rfc3ViamVjdCIsIm5iZiI6MTczNjM0OTQzMCwiaWF0IjoxNzM2MzQ5NDMwLCJkaWdlc3QiOiIxNWM0MTZkN2JkOTg5MGY1Y2JjYzg3NTEyMjgzN2FkM2YxNGEyNTg5ZDFkMTYzYjBhNjg1Yzg2ODcwMDgyMjcwIn0.RmVuxnCntd6DVeFjTNE0-s47i5tALJ0vHgmimTPQSNoTWLM-kn8fipytFfR-yKzAPc5AwpVAE5Z3YNJ-D6C-nphnCSOch6_YDIWTVASvIbtYkCby9QMBQvemFMtq07AIIbe59O4krrp5obKmhjtyIFTm7dJiTGC9jj1JCtcR144h_egiDUdkvt3ISpii_BgbhCfVJ4xomPg_0GjknUaKeZZEs1rqZT44rH8-1DicD_eomqp7NZVTMLIiYL9RpbjlyYKbTuODqvRnkzrGhuVjCTiujgCWDVGOaBZE_ExD2XYhMhY14p5ezv3Tehp2eqvqPhZ1CHGt4cVCdcmNcAzBIw"),
-				key:     publicKey,
-			},
-			want:    false,
-			wantErr: true,
-		},
-		{
-			name: "EmptyToken",
-			args: args{
-				issuer:  testIssuer,
-				subject: testSubject,
-				data:    testFileData,
-				token:   []byte{},
-				key:     publicKey,
-			},
-			want:    false,
-			wantErr: true,
-		},
-		{
-			name: "InvalidToken",
-			args: args{
-				issuer:  testIssuer,
-				subject: testSubject,
-				data:    testFileData,
-				token:   []byte("this is not a JWT"),
-				key:     publicKey,
-			},
-			want:    false,
-			wantErr: true,
-		},
-		{
-			name: "NilToken",
-			args: args{
-				issuer:  testIssuer,
-				subject: testSubject,
-				data:    testFileData,
-				token:   nil,
-				key:     publicKey,
+				issuer:       testIssuer,
+				manifestPath: "_test/missing",
+				root:         "",
+				key:          publicKey,
 			},
 			want:    false,
 			wantErr: true,
@@ -453,11 +363,32 @@ func TestVerify(t *testing.T) {
 		{
 			name: "NilKey",
 			args: args{
-				issuer:  testIssuer,
-				subject: testSubject,
-				data:    testFileData,
-				token:   []byte("eyJhbGciOiJSUzUxMiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ0ZXN0X2lzc3VlciIsInN1YiI6InRlc3Rfc3ViamVjdCIsIm5iZiI6MTczNjM0OTQzMCwiaWF0IjoxNzM2MzQ5NDMwLCJkaWdlc3QiOiIxNWM0MTZkN2JkOTg5MGY1Y2JjYzg3NTEyMjgzN2FkM2YxNGEyNTg5ZDFkMTYzYjBhNjg1Yzg2ODcwMDgyMjcwIn0.RmVuxnCntd6DVeFjTNE0-s47i5tALJ0vHgmimTPQSNoTWLM-kn8fipytFfR-yKzAPc5AwpVAE5Z3YNJ-D6C-nphnCSOch6_YDIWTVASvIbtYkCby9QMBQvemFMtq07AIIbe59O4krrp5obKmhjtyIFTm7dJiTGC9jj1JCtcR144h_egiDUdkvt3ISpii_BgbhCfVJ4xomPg_0GjknUaKeZZEs1rqZT44rH8-1DicD_eomqp7NZVTMLIiYL9RpbjlyYKbTuODqvRnkzrGhuVjCTiujgCWDVGOaBZE_ExD2XYhMhY14p5ezv3Tehp2eqvqPhZ1CHGt4cVCdcmNcAzBIw"),
-				key:     nil,
+				issuer:       testIssuer,
+				manifestPath: "_test/valid.integrity",
+				root:         "",
+				key:          nil,
+			},
+			want:    false,
+			wantErr: true,
+		},
+		{
+			name: "InvalidSignature",
+			args: args{
+				issuer:       testIssuer,
+				manifestPath: "_test/invalid_signature.integrity",
+				root:         "",
+				key:          publicKey,
+			},
+			want:    false,
+			wantErr: true,
+		},
+		{
+			name: "InvalidDigest",
+			args: args{
+				issuer:       testIssuer,
+				manifestPath: "_test/invalid_digest.integrity",
+				root:         "",
+				key:          publicKey,
 			},
 			want:    false,
 			wantErr: true,
@@ -466,152 +397,13 @@ func TestVerify(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := integrity.Verify(tt.args.issuer, tt.args.subject, tt.args.data, tt.args.token, tt.args.key)
+			got, err := integrity.VerifyManifest(tt.args.issuer, tt.args.manifestPath, tt.args.root, tt.args.key)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("Verify() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("VerifyManifest() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			if got != tt.want {
-				t.Errorf("Verify() got = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestVerifyFile(t *testing.T) {
-	integrity.WithNowFunc(func() time.Time {
-		return now
-	})
-	var publicKey = getTestPublicKey()
-
-	createTestDataFile()
-	defer deleteTestDataFile()
-
-	createTestIntegrityFile()
-	defer deleteTestIntegrityFile()
-
-	type args struct {
-		issuer        string
-		path          string
-		integrityPath string
-		key           *rsa.PublicKey
-	}
-	tests := []struct {
-		name    string
-		args    args
-		want    bool
-		wantErr bool
-	}{
-		{
-			name: "Success",
-			args: args{
-				issuer:        testIssuer,
-				path:          testFilePath,
-				integrityPath: testIntegrityPath,
-				key:           publicKey,
-			},
-			want:    true,
-			wantErr: false,
-		},
-		{
-			name: "EmptyIssuer",
-			args: args{
-				issuer:        "",
-				path:          testFilePath,
-				integrityPath: testIntegrityPath,
-				key:           publicKey,
-			},
-			want:    false,
-			wantErr: true,
-		},
-		{
-			name: "EmptyPath",
-			args: args{
-				issuer:        testIssuer,
-				path:          "",
-				integrityPath: testIntegrityPath,
-				key:           publicKey,
-			},
-			want:    false,
-			wantErr: true,
-		},
-		{
-			name: "InvalidPath",
-			args: args{
-				issuer:        testIssuer,
-				path:          "invalid?path6&&^&9))&&%^&(~@}{@#['#}{@~\\/.<>???<<>><dajk,;s./,a1!",
-				integrityPath: testIntegrityPath,
-				key:           publicKey,
-			},
-			want:    false,
-			wantErr: true,
-		},
-		{
-			name: "WrongPath",
-			args: args{
-				issuer:        testIssuer,
-				path:          "this_file_does_not_exist.dontcallitthis",
-				integrityPath: testIntegrityPath,
-				key:           publicKey,
-			},
-			want:    false,
-			wantErr: true,
-		},
-		{
-			name: "EmptyIntegrityPath",
-			args: args{
-				issuer:        testIssuer,
-				path:          testFilePath,
-				integrityPath: "",
-				key:           publicKey,
-			},
-			want:    false,
-			wantErr: true,
-		},
-		{
-			name: "InvalidIntegrityPath",
-			args: args{
-				issuer:        testIssuer,
-				path:          testFilePath,
-				integrityPath: "invalid?9834r9*&^*&Y*£)(U(*U(O£ORKJR#'[;4r#[;4r[][}{{@~}{@@?@>@?>.,.?><>/",
-				key:           publicKey,
-			},
-			want:    false,
-			wantErr: true,
-		},
-		{
-			name: "WrongIntegrityPath",
-			args: args{
-				issuer:        testIssuer,
-				path:          testFilePath,
-				integrityPath: "this_file_does_not_exist_either.teeeeeeeeeeeesssssttttttt",
-				key:           publicKey,
-			},
-			want:    false,
-			wantErr: true,
-		},
-		{
-			name: "NilKey",
-			args: args{
-				issuer:        testIssuer,
-				path:          testFilePath,
-				integrityPath: testIntegrityPath,
-				key:           nil,
-			},
-			want:    false,
-			wantErr: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := integrity.VerifyFile(tt.args.issuer, tt.args.path, tt.args.integrityPath, tt.args.key)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("VerifyFile() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if got != tt.want {
-				t.Errorf("VerifyFile() got = %v, want %v", got, tt.want)
+				t.Errorf("VerifyManifest() got = %v, want %v", got, tt.want)
 			}
 		})
 	}

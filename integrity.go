@@ -1,5 +1,5 @@
-// Package integrity provides methods for creating and verifying signed JWTs containing a SHA256 digest.
-// These can be used to verify an executable (or any other data) has not been tampered with.
+// Package integrity provides methods for creating and verifying signed JWTs containing a map of SHA256 digests.
+// These can be used to verify files have not been tampered with.
 package integrity
 
 import (
@@ -7,10 +7,9 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"io"
 	"os"
-	"strings"
+	"path"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -21,35 +20,38 @@ var now = time.Now
 
 type tokenClaims struct {
 	jwt.RegisteredClaims
-	Digest string `json:"digest"`
+	Manifest map[string]string `json:"manifest"`
 }
 
-// Sign returns an RSA512-signed JWT containing the digest of data, along with the iss, sub, nbf, and iat claims.
-func Sign(issuer, subject string, data []byte, key *rsa.PrivateKey) ([]byte, error) {
-	if len(data) < 1 {
-		return nil, errors.New("data cannot be empty")
-	}
+func GenerateManifest(issuer string, paths []string, key *rsa.PrivateKey) ([]byte, error) {
 	if issuer == "" {
-		return nil, errors.New("issuer cannot be empty")
+		return nil, errors.New("issuer cannot be blank")
 	}
-	if subject == "" {
-		return nil, errors.New("subject cannot be empty")
+	if len(paths) < 1 {
+		return nil, errors.New("must specify at least one path")
 	}
 	if key == nil {
-		return nil, errors.New("private key cannot be nil")
+		return nil, errors.New("key cannot be blank")
 	}
 
-	digest := sha256.Sum256(data)
+	paths = deduplicate(paths)
+
+	digests := make(map[string]string)
+	for i := range paths {
+		digest, err := generateDigestForFile(paths[i])
+		if err != nil {
+			return nil, err
+		}
+		digests[paths[i]] = hex.EncodeToString(digest[:])
+	}
 
 	n := now()
 	claims := tokenClaims{
 		RegisteredClaims: jwt.RegisteredClaims{
-			Issuer:    issuer,
-			Subject:   subject,
-			NotBefore: jwt.NewNumericDate(n),
-			IssuedAt:  jwt.NewNumericDate(n),
+			Issuer:   issuer,
+			IssuedAt: jwt.NewNumericDate(n),
 		},
-		Digest: fmt.Sprintf("%x", digest[:]),
+		Manifest: digests,
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodRS512, claims)
@@ -61,113 +63,56 @@ func Sign(issuer, subject string, data []byte, key *rsa.PrivateKey) ([]byte, err
 	return []byte(tokenStr), nil
 }
 
-// SignFile returns an RSA512-signed JWT containing the digest of the file located at path, along with the iss, sub, nbf, and iat claims.
-// The file name is used as the subject.
-func SignFile(issuer, path string, key *rsa.PrivateKey) ([]byte, error) {
-	if path == "" {
-		return nil, errors.New("path cannot be empty")
-	}
-
-	f, err := os.OpenFile(path, os.O_RDONLY, 0444)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-
-	data, err := io.ReadAll(f)
-	if err != nil {
-		return nil, err
-	}
-
-	pathParts := strings.Split(strings.Replace(path, "\\", "/", -1), "/")
-	subject := pathParts[len(pathParts)-1]
-
-	return Sign(issuer, subject, data, key)
-}
-
-// Verify returns whether the issuer, subject, and digest match the ones in the JWT contained in data.
-func Verify(issuer, subject string, data []byte, token []byte, key *rsa.PublicKey) (bool, error) {
-	if len(token) < 1 {
-		return false, errors.New("token cannot be empty")
-	}
+func VerifyManifest(issuer, manifestPath, root string, key *rsa.PublicKey) (bool, error) {
 	if issuer == "" {
-		return false, errors.New("issuer cannot be empty")
+		return false, errors.New("issuer cannot be blank")
 	}
-	if subject == "" {
-		return false, errors.New("subject cannot be empty")
+	if manifestPath == "" {
+		return false, errors.New("manifest path cannot be blank")
 	}
 	if key == nil {
 		return false, errors.New("key cannot be nil")
 	}
 
+	token, err := readDataFromFile(path.Join(root, manifestPath))
+	if err != nil {
+		return false, err
+	}
+
 	claims := tokenClaims{}
-	_, err := jwt.ParseWithClaims(string(token), &claims, func(t *jwt.Token) (interface{}, error) {
+	_, err = jwt.ParseWithClaims(string(token), &claims, func(t *jwt.Token) (interface{}, error) {
 		if _, ok := t.Method.(*jwt.SigningMethodRSA); !ok {
 			return nil, jwt.ErrTokenSignatureInvalid
 		}
 		return key, nil
-	}, jwt.WithIssuer(issuer), jwt.WithSubject(subject), jwt.WithIssuedAt(), jwt.WithLeeway(time.Second*10))
+	}, jwt.WithIssuer(issuer), jwt.WithIssuedAt(), jwt.WithLeeway(time.Second*10))
 
 	if err != nil {
 		return false, err
 	}
 
-	var claimDigest [32]byte
-	n, err := hex.Decode(claimDigest[:], []byte(claims.Digest))
-	if err != nil {
-		return false, err
-	} else if n != 32 {
-		return false, errors.New("did not decode expected number of bytes from hex digest string")
-	}
+	for k := range claims.Manifest {
+		var claimDigest [32]byte
+		n, hexErr := hex.Decode(claimDigest[:], []byte(claims.Manifest[k]))
+		if hexErr != nil {
+			return false, hexErr
+		} else if n != 32 {
+			return false, errors.New("did not decode expected number of bytes from hex digest string")
+		}
 
-	digest := sha256.Sum256(data)
+		digest, dErr := generateDigestForFile(k)
+		if dErr != nil {
+			return false, dErr
+		}
 
-	for i := 0; i < 32; i++ {
-		if digest[i] != claimDigest[i] {
-			return false, errors.New("digests do not match")
+		for i := 0; i < 32; i++ {
+			if digest[i] != claimDigest[i] {
+				return false, errors.New("digests do not match")
+			}
 		}
 	}
 
 	return true, nil
-}
-
-// VerifyFile returns whether the claims are valid and the digest of the file at path match the ones in the file at integrityPath.
-// integrityPath should contain the JWT generated by Sign or SignFile.
-// This function assumes the subject is the file name given by path.
-func VerifyFile(issuer, path, integrityPath string, key *rsa.PublicKey) (bool, error) {
-	if path == "" {
-		return false, errors.New("path cannot be empty")
-	}
-	if integrityPath == "" {
-		return false, errors.New("integrity file path cannot be empty")
-	}
-
-	f, err := os.OpenFile(path, os.O_RDONLY, 0444)
-	if err != nil {
-		return false, err
-	}
-	defer f.Close()
-
-	data, err := io.ReadAll(f)
-	if err != nil {
-		return false, err
-	}
-
-	integf, err := os.OpenFile(integrityPath, os.O_RDONLY, 0444)
-	if err != nil {
-		return false, err
-	}
-	defer integf.Close()
-
-	integrityData, err := io.ReadAll(integf)
-	if err != nil {
-		return false, err
-	}
-
-	pathParts := strings.Split(strings.Replace(path, "\\", "/", -1), "/")
-	subject := pathParts[len(pathParts)-1]
-
-	return Verify(issuer, subject, data, integrityData, key)
 }
 
 // WithNowFunc overrides the function to get the current time. Call this with a function that returns a static time for
@@ -175,4 +120,43 @@ func VerifyFile(issuer, path, integrityPath string, key *rsa.PublicKey) (bool, e
 // Do not call this function during normal operating circumstances.
 func WithNowFunc(nowFunc func() time.Time) {
 	now = nowFunc
+}
+
+// Read in file data with a deferred close.
+func readDataFromFile(path string) ([]byte, error) {
+	mf, err := os.OpenFile(path, os.O_RDONLY, 0444)
+	if err != nil {
+		return nil, err
+	}
+	defer mf.Close()
+
+	return io.ReadAll(mf)
+}
+
+// Generate a SHA256 digest for a file located at path.
+func generateDigestForFile(path string) ([32]byte, error) {
+	b, err := readDataFromFile(path)
+	if err != nil {
+		return [32]byte{}, err
+	}
+
+	return sha256.Sum256(b), nil
+}
+
+// Returns a new slice containing only unique occurrences in l.
+func deduplicate(l []string) []string {
+	ll := make([]string, 0)
+	for i := range l {
+		alreadyFound := false
+		for j := range ll {
+			if l[i] == ll[j] {
+				alreadyFound = true
+				break
+			}
+		}
+		if !alreadyFound {
+			ll = append(ll, l[i])
+		}
+	}
+	return ll
 }
